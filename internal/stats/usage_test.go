@@ -48,7 +48,7 @@ func TestRequestLogRing(t *testing.T) {
 // Token 多天窗口：today/days7/days30/all 的归档边界与「已记录天数」。
 func TestTokenUsageWindows(t *testing.T) {
 	s := newTestStats(t)
-	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.Local)
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, testLoc())
 	old := base.AddDate(0, 0, -40)                             // 落在 30 日窗口外、计入 all
 	s.AddUsage("workbuddy/m", 20, 10, 0, 0, 0, 0, false, old)  // 30 token
 	s.AddUsage("workbuddy/m", 30, 20, 0, 0, 0, 0, false, base) // 50 token（今日=base）

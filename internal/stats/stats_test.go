@@ -7,9 +7,20 @@ import (
 	"time"
 )
 
+// testLoc 测试统一时区 = 生产代码的到期墙钟口径（provider.expireLoc，UTC+8）。
+//
+// 为什么不用 time.Local：CI 的 runner 是 UTC，本地开发机是 UTC+8。
+// 到期值（"2026-10-20T00:00:00+08:00"）**永远按 UTC+8 解释**（provider.ExpireInstant），
+// 而测试里的锚点 base 若跟着 time.Local 走，两者在 UTC runner 上会差 8 小时，
+// 于是「今晚 24:00 失效 = 剩 10h」变成「剩 2h」——判据本身没错，是测试自相矛盾。
+// 统一到 UTC+8 后，测试的墙钟直觉与生产口径一致，且与 runner 时区无关。
+func testLoc() *time.Location {
+	return time.FixedZone("UTC+8", 8*60*60)
+}
+
 // tNow 固定时区的时间锚（测试跨天用）。
 func tNow(day int, hour int) time.Time {
-	return time.Date(2026, 10, day, hour, 0, 0, 0, time.Local)
+	return time.Date(2026, 10, day, hour, 0, 0, 0, testLoc())
 }
 
 func acct1(credits int64) Account {
@@ -151,7 +162,7 @@ func TestRollDayResets(t *testing.T) {
 // 跨天归档：今日 tokens/reqs/模型消耗转入历史 map，全部今日口径重置。
 func TestDayRollArchives(t *testing.T) {
 	s := newTestStats(t)
-	day1 := time.Date(2026, 10, 20, 12, 0, 0, 0, time.Local)
+	day1 := time.Date(2026, 10, 20, 12, 0, 0, 0, testLoc())
 	s.ApplyPoll([]Account{acct1(1000)}, day1)
 	s.AddUsage("workbuddy/m1", 30, 20, 0.5, 400, 2, 0, false, day1)
 	if snap := s.Snapshot(day1); snap.Tokens != 50 {

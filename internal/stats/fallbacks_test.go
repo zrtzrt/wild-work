@@ -12,7 +12,7 @@ func TestFallbackEventLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := time.Date(2026, 10, 13, 19, 0, 0, 0, time.Local)
+	base := time.Date(2026, 10, 13, 19, 0, 0, 0, testLoc())
 
 	s.NoteFallback("a/x", "b/y", base)
 	snap := s.Snapshot(base)
@@ -55,7 +55,7 @@ func TestFallbackEventLifecycle(t *testing.T) {
 // TestFallbackSnapshotNewestFirst 快照最新在前；多次降级各自成行。
 func TestFallbackSnapshotNewestFirst(t *testing.T) {
 	s, _ := New(t.TempDir(), nil)
-	base := time.Date(2026, 10, 13, 19, 0, 0, 0, time.Local)
+	base := time.Date(2026, 10, 13, 19, 0, 0, 0, testLoc())
 	s.NoteFallback("a/first", "b/one", base)
 	s.NoteFallbackRecovery("a/first", base.Add(time.Minute))
 	s.NoteFallback("a/second", "b/two", base.Add(2*time.Minute))
@@ -75,7 +75,7 @@ func TestFallbackSnapshotNewestFirst(t *testing.T) {
 // TestFallbackRingCap 环形上限：超限丢最旧，快照恒 ≤ fbKeepMax。
 func TestFallbackRingCap(t *testing.T) {
 	s, _ := New(t.TempDir(), nil)
-	base := time.Date(2026, 10, 13, 19, 0, 0, 0, time.Local)
+	base := time.Date(2026, 10, 13, 19, 0, 0, 0, testLoc())
 	for i := 0; i < fbKeepMax+50; i++ {
 		s.NoteFallback(time.Duration(i).String()+"/m", "b/x", base.Add(time.Duration(i)*time.Second))
 	}
