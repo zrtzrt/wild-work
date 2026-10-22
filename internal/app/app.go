@@ -3,6 +3,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -4063,6 +4065,37 @@ func (a *App) HandleAPI(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, a.FeesInfo())
 		go a.safeGo(func() { a.RefreshPricing() })
 	})
+	mux.HandleFunc("POST /api/models/test", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Model  string   `json:"model"`
+			Models []string `json:"models"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			apiError(w, http.StatusBadRequest, "解析请求失败："+err.Error())
+			return
+		}
+		if req.Model == "" && len(req.Models) == 0 {
+			apiError(w, http.StatusBadRequest, "model 不能为空")
+			return
+		}
+		if req.Model != "" {
+			res := a.TestModel(r.Context(), req.Model)
+			writeJSON(w, http.StatusOK, res)
+			return
+		}
+		results := make([]ModelTestResult, 0, len(req.Models))
+		for _, m := range req.Models {
+			if r.Context().Err() != nil {
+				break
+			}
+			res := a.TestModel(r.Context(), m)
+			results = append(results, res)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":      true,
+			"results": results,
+		})
+	})
 	mux.HandleFunc("GET /api/usage", func(w http.ResponseWriter, r *http.Request) {
 		if a.ledger == nil {
 			writeJSON(w, http.StatusOK, map[string]any{"disabled": true})
@@ -4429,6 +4462,103 @@ func (a *App) FeesInfo() map[string]any {
 		result["error"] = errMsg
 	}
 	return result
+}
+
+// ModelTestResult 单个模型的测试结果。
+type ModelTestResult struct {
+	Model     string `json:"model"`
+	OK        bool   `json:"ok"`
+	Status    int    `json:"status"`
+	LatencyMS int64  `json:"latency_ms"`
+	Reply     string `json:"reply,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// TestModel 测试单个模型的可用性与连通性。
+func (a *App) TestModel(ctx context.Context, model string) ModelTestResult {
+	res := ModelTestResult{Model: model}
+	h := a.serveHandler()
+	if h == nil {
+		h = a.handler
+	}
+	if h == nil {
+		res.Error = "服务未就绪"
+		return res
+	}
+
+	reqBody, err := json.Marshal(map[string]any{
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": "hi"},
+		},
+		"stream":     false,
+		"max_tokens": 16,
+	})
+	if err != nil {
+		res.Error = "构建测试请求失败: " + err.Error()
+		return res
+	}
+
+	testCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+
+	req := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/chat/completions", bytes.NewReader(reqBody))
+	req.Host = "127.0.0.1"
+	req.Header.Set("Content-Type", "application/json")
+	apiKey := a.cfg.APIKey
+	if a.handler != nil && a.handler.CurrentAPIKey() != "" {
+		apiKey = a.handler.CurrentAPIKey()
+	}
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	rec := httptest.NewRecorder()
+	start := time.Now()
+	h.ServeHTTP(rec, req)
+	res.LatencyMS = time.Since(start).Milliseconds()
+	res.Status = rec.Code
+
+	if rec.Code == http.StatusOK {
+		res.OK = true
+		var chatResp struct {
+			Choices []struct {
+				Message struct {
+					Content          string `json:"content"`
+					ReasoningContent string `json:"reasoning_content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &chatResp); err == nil && len(chatResp.Choices) > 0 {
+			content := strings.TrimSpace(chatResp.Choices[0].Message.Content)
+			if content == "" {
+				content = strings.TrimSpace(chatResp.Choices[0].Message.ReasoningContent)
+			}
+			if len(content) > 120 {
+				content = content[:120] + "…"
+			}
+			res.Reply = content
+		}
+	} else {
+		res.OK = false
+		var errResp struct {
+			Error struct {
+				Message string `json:"message"`
+				Code    any    `json:"code"`
+				Type    string `json:"type"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err == nil && errResp.Error.Message != "" {
+			res.Error = errResp.Error.Message
+		} else {
+			raw := strings.TrimSpace(rec.Body.String())
+			if len(raw) > 150 {
+				raw = raw[:150] + "…"
+			}
+			res.Error = raw
+		}
+	}
+	return res
 }
 
 // capSourceOf 把 ModelInfo 的三个互斥来源位归成一个字符串，给面板逐行标注（R119）。
