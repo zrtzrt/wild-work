@@ -8,6 +8,15 @@ on:
     tags:
       - 'v*'
 
+# 最小权限：构建只需要读仓库；只有 release job 单独提权到 contents: write。
+permissions:
+  contents: read
+
+# 同一 tag 只跑一次；重复推送同一 tag 不并发跑两份构建（否则两个 job 会争抢同一个 release）。
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -60,9 +69,12 @@ jobs:
         with:
           ref: ${{ github.event_name == 'push' && github.ref || 'master' }}
           fetch-depth: 0
+      # 版本唯一来源是 go.mod（当前 go 1.25.0）：workflow 里再写一份就会漂移，
+      # 本仓历史上踩过「本地 1.27 构建、CI 1.25 构建」的工具链差异。
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version-file: go.mod
+          cache: true
 
       - name: Generate icon resource (rsrc)
         if: matrix.needs_rsrc
@@ -70,6 +82,15 @@ jobs:
           go install github.com/akavel/rsrc@latest
           cp build/windows/icon.ico cmd/wild-work/icon.ico
           rsrc -ico cmd/wild-work/icon.ico -o cmd/wild-work/rsrc_windows_amd64.syso
+
+      # 发布门禁：一个手滑的 tag（版本常量没 bump、RELEASES.md 没写段落、决议项范围标记没同步）
+      # 会直接产出版本号对不上/说明空白的正式 release，而 tag 一旦被消费就不好重发。
+      # 判据脚本随仓库走（scripts/check-release.sh），本地发版前也能跑同一份。
+      - name: Release preflight (version / notes / decision range)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: bash scripts/check-release.sh
 
       - name: Build
         env:
@@ -145,6 +166,21 @@ jobs:
           name: ${{ matrix.name }}
           path: dist/wild-work-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
 
+      # 每个二进制同时产出 SHA256 校验文件（与 GitHub Release 资产自带的 digest 同算法）。
+      # 自动更新器只认真实 SHA256（internal/updater 拒收无 digest 的资产），
+      # 单独把校验和发出来也能让用户在不依赖 GitHub API 的情况下核对下载结果。
+      - name: Generate SHA256 checksum
+        run: |
+          OUT="dist/wild-work-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
+          ( cd dist && shasum -a 256 "$(basename "${OUT}")" > "$(basename "${OUT}").sha256" )
+          cat "dist/$(basename "${OUT}").sha256"
+
+      - name: Upload SHA256 checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-sha256
+          path: dist/wild-work-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}.sha256
+
       # dmg 单独作为 artifact 上传。release job 会 find 平铺 artifacts/ 下所有文件，
       # 因此这里不需要改 release 逻辑，dmg 会自动进入 release 资产。
       # 版本号来自 internal/app/app.go 的 Version 常量，workflow 里拿不到，故用通配符；
@@ -193,6 +229,13 @@ jobs:
             # 兼容旧的独立文件 RELEASE-<tag>.md（若存在则优先）。
             # 都找不到时回退到 --generate-notes，不阻塞发版。
             NOTES="RELEASE-${TAG}.md"
+            # 幂等：同一 tag 的 release 已存在（重跑 workflow / 重推 tag）时先删干净再建，
+            # 否则 gh release create 会直接报「tag already exists」把发版卡成红叉，
+            # 而 AGENTS.md §4 本就要求重发同一版本必须先删旧 release + 旧 tag。
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "=== 已存在 $TAG release，按重发语义先删除（--cleanup-tag）==="
+              gh release delete "$TAG" --yes --cleanup-tag || true
+            fi
             if [[ -f "$NOTES" ]]; then
               echo "=== 使用独立文件 $NOTES 作为 release note ==="
               gh release create "$TAG" release-assets/* --title "$TAG" --notes-file "$NOTES"

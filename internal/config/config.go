@@ -248,7 +248,7 @@ type UpdaterConfig struct {
 	Enabled            bool     `json:"enabled"`              // 是否启用更新检测，默认 true
 	AutoCheck          bool     `json:"auto_check"`           // 是否启动及后台定期自动检测，默认 true
 	CheckIntervalHours int      `json:"check_interval_hours"` // 检测间隔小时数，默认 6
-	Repo               string   `json:"repo"`                 // GitHub 仓库，默认 "rockswang/wild-work"
+	Repo               string   `json:"repo"`                 // GitHub 仓库，默认 "zrtzrt/wild-work"（上游 rockswang/wild-work 已归档，R127）
 	Proxies            []string `json:"download_proxies,omitempty"` // 公共加速代理前缀列表
 }
 
@@ -287,7 +287,7 @@ func Default() *Config {
 	c.Updater.Enabled = true
 	c.Updater.AutoCheck = true
 	c.Updater.CheckIntervalHours = 6
-	c.Updater.Repo = "rockswang/wild-work"
+	c.Updater.Repo = "zrtzrt/wild-work"
 	c.Updater.Proxies = []string{"https://gh-proxy.com/", "https://ghfast.top/"}
 	return c
 }
@@ -591,7 +591,7 @@ func (c *Config) normalize() error {
 		c.Updater.CheckIntervalHours = 6
 	}
 	if c.Updater.Repo == "" {
-		c.Updater.Repo = "rockswang/wild-work"
+		c.Updater.Repo = "zrtzrt/wild-work"
 	}
 	if len(c.Updater.Proxies) == 0 {
 		c.Updater.Proxies = []string{"https://gh-proxy.com/", "https://ghfast.top/"}

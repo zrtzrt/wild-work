@@ -45,7 +45,7 @@
 
 ---
 
-## 1. 决议项索引（R1–R126）
+## 1. 决议项索引（R1–R127）
 
 **全文（含证据链、反例、已知限制）见 [`docs/决议项.md`](docs/决议项.md)** —— 改动相关代码前必读对应条目。
 
@@ -158,6 +158,7 @@
 | R124 | **`/v1/models` 补 `supported_parameters` 与 `reasoning.mandatory`（合入外部 PR #189，作者 reno；**剔掉了本仓并未实现的 `include_reasoning`**）**（2026-10-22）：出站模型面按**已声明能力**导出 `supported_parameters`（`SupportsTools` ⇒ `tools`/`tool_choice`；有思考档位 ⇒ `reasoning`/`reasoning_effort`），`reasoning.mandatory = !*CanDisableThinking` **且仅在 `CanDisableThinking != nil` 时出现**，两者皆无 ⇒ 整个字段缺席（R49「只透传声明，绝不编造」在模型元数据面的落地）。与 PR 原样的唯一差异：`include_reasoning` 全仓**零处理点**（入站只吃 `reasoning_effort` 与 Responses 的 `reasoning` 对象）⇒ 宣告一个我们不接的参数会让客户端照它发并被静默忽略，故剔除并加护栏断言。决议号按 **R123** 从 PR 自登记的 R122 顺延。详见 [`docs/决议项.md`](docs/决议项.md) R124 |
 | R125 | **Gemini 渠道全面升级为 Antigravity OAuth 标准并支持模型动态拉取与多窗口配额**（2026-10-22，issue #167、PR #182、PR #190）：转向公开客户端 PKCE 授权码流程（Antigravity 官方白名单回调 `https://antigravity.google/oauth-callback`）；移除未登记 scope 防 403；支持完整回调 URL 与官方直接显示的授权码（`4/0AX...`）；动态拉取严格恪守 R49/R119，不猜测未声明能力；隔离 5h 与周配额窗口。详见 [`docs/决议项.md`](docs/决议项.md) R125 |
 | R126 | **扩展标准端点支持 Embeddings 向量化与 Imagen 生图**（2026-10-22，PR #190 续）：新增标准端点 `POST /v1/embeddings`（定义 `EmbeddingsProvider` 扩展接口）；扩展 `POST /v1/images/generations` 支持 Gemini/Imagen 生图分流至上游 `/v1internal:predict`；接入 `/v1internal:embedContent` 提供开箱即用向量化能力。详见 [`docs/决议项.md`](docs/决议项.md) R126 |
+| R127 | **上游归档后自建发版链路：更新源切到 zrtzrt/wild-work、CI 补测试闸门、发版前置校验与 SHA256 校验和、Actions 幂等发版**（2026-10-22，用户定「上游不更新了，把 action 等加上，我自己发布新版」）：① `internal/updater.DefaultRepo` 成为更新源单一来源，config 默认/兜底、`config.example.json`、`app.js` 发布页兜底链接全部改指 fork；② 新增 `.github/workflows/test.yml`（push master / PR 跑 `go build ./... && go vet ./... && go test -count=1 ./...` + `ui-static-check`）；③ 新增 `scripts/check-release.sh` 发版前置校验（版本常量=tag、RELEASES.md 含该段落、决议项范围标记三处一致）；④ `build.yml` 最小权限 + 并发组 + 产物 `.sha256` + `gh release` 幂等删除。详见 [`docs/决议项.md`](docs/决议项.md) R127 |
 
 > ⚠️ **R71 附带的实测纪律**（也是 §0.1 的来源）：上游校验的是**头族齐全**而非单点
 > （只补 `X-Conversation-ID` 仍被拒）；且 `X-Conversation-ID` 的**取值形态不被校验**
@@ -369,22 +370,47 @@ python -c "b=open('dist/wild-work.exe','rb').read(); print('new:',b.count(b'2.8.
 # 期望：new >= 1 且 old == 0。若旧版本号仍在，说明构建未生效。
 ```
 
-### 发版（tag 触发）
+### 发版（tag 触发，发到本仓 fork）
 
-push `v*` tag → GitHub Actions 构建五平台产物并创建正式 release。
+**上游 `rockswang/wild-work` 已归档**（2026-10-22，R127），发版与自动更新的仓库都是
+`zrtzrt/wild-work`（本地 remote 名 `fork`）。push `v*` tag 到 **fork** → GitHub Actions
+构建五平台产物并创建正式 release。
+
 **release note 用仓库根目录的 `RELEASES.md`**（按版本从旧到新排列，新版本说明**append 到文件末尾**）。
 CI 从 `RELEASES.md` 截取对应版本段落（`# wild-work vX.Y.Z` 起）作为手写摘要，
-而不是 `--generate-notes`；段落缺失时回退自动生成，不阻塞发版。
+而不是 `--generate-notes`；段落缺失时回退自动生成，**但发版前置校验会先把它拦下来**（见下）。
 
 ```bash
-# 发版前确认：版本常量已 bump（internal/app/app.go const Version）、
-# RELEASES.md 末尾已追加对应版本段落（# wild-work vX.Y.Z）且与 tag 名一致、
-# dist/wild-work.exe 已本地重建验证
-git tag vX.Y.Z && git push origin vX.Y.Z
+# 0) 本地判据（与 CI 同一份脚本，只读、不写文件）
+TAG=vX.Y.Z bash scripts/check-release.sh
+
+# 1) 发版前确认：版本常量已 bump（internal/app/app.go const Version）、
+#    RELEASES.md 末尾已追加对应版本段落（# wild-work vX.Y.Z）且与 tag 名一致、
+#    dist/wild-work.exe 已本地重建验证、master 已推到 fork
+git push fork master
+
+# 2) 打 tag 并推到 fork（触发 Build Release）
+git tag vX.Y.Z && git push fork vX.Y.Z
 ```
 
-> **重发同一版本**：`gh release delete <tag> --yes --cleanup-tag`（或 API 删 release + 删 tag）
-> → 重打 tag 指向新提交 → 推送。CI 的 `gh release create` 遇到已存在的 tag 会失败，**必须先删干净**。
+**流水线（`.github/workflows/`）**：
+
+| 工作流 | 触发 | 做什么 |
+|---|---|---|
+| `test.yml`（R127 新增） | push master / 任何 PR | `go build` + `go vet` + `go test -count=1`（CGO 关，与 Win/Linux 产物一致）+ `node scripts/ui-static-check.mjs` |
+| `build.yml` | tag `v*`，或手动 dispatch | 五平台构建；**tag 触发时先跑 `scripts/check-release.sh`**；每个产物额外产 `.sha256`；release job 幂等建 release |
+
+`scripts/check-release.sh` 断言三件事，任一不满足即让 job 失败（比发出去了再删 tag 便宜）：
+① `internal/app/app.go` 的 `Version` 与 tag 一致；② `RELEASES.md` 已有该版本段落；
+③ 决议项范围标记三处（`AGENTS.md` §1 / §6、`docs/决议项.md:1`）彼此一致。
+
+产物名（与 `internal/updater` 的 `MatchAsset` 期望一致，**改名会让自动更新失效**）：
+`wild-work-windows-amd64.exe` / `wild-work-darwin-arm64` / `wild-work-darwin-amd64` /
+`wild-work-linux-amd64` / `wild-work-linux-arm64`，外加 `WildWork-<ver>-<arch>.dmg` 与各自 `.sha256`。
+
+> **重发同一版本**：`gh release delete <tag> -R zrtzrt/wild-work --yes --cleanup-tag`
+> → 重打 tag 指向新提交 → 推送。`build.yml` 现在会**幂等删除同名 release** 再建，
+> 但 tag 本身仍需手动处理（删 tag → 重推），否则 checkout 拿到的是旧 tag 指向的旧提交。
 
 ---
 
@@ -438,7 +464,7 @@ bash scripts/probe-dump.sh summarize                # 汇总各渠道 usage 字�
 | [README.md](README.md) | 用户文档 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 开发者文档（面向 AI Agent） |
 | [AGENTS.md](AGENTS.md) | **本文件**：纪律 + 决议索引 + 关键不变量 + 构建发版 |
-| [docs/决议项.md](docs/决议项.md) | **R1–R126 决议全文**（证据链、反例、已知限制） |
+| [docs/决议项.md](docs/决议项.md) | **R1–R127 决议全文**（证据链、反例、已知限制） |
 | [docs/渠道接入备忘.md](docs/渠道接入备忘.md) | 各渠道协议要点、凭据模型、已知限制与踩坑 |
 | [docs/接口参考.md](docs/接口参考.md) | 面板区块规划 + 管理 API 全量清单 |
 | [docs/模型降级链定义.md](docs/模型降级链定义.md) | **模型降级链的唯一权威定义**：三维归因、错误类型全量归属、两条触发路径、三条硬规则、已知限制（R94） |

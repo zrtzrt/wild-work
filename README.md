@@ -2,7 +2,11 @@
 
 > 多渠道账号聚合桌面工具——把 WorkBuddy(CodeBuddy) 国内版/国际版、TraeWork、QoderCN、QoderCOM（国际版）、千问办公、MonkeyCode 平台托管模型、小浣熊、Loomy（讯飞）、智谱清言、Cline（官方 API Key 免费池）、华为云果办 OfficeAce 的多个账号聚合成一个 OpenAI 兼容 API，并额外提供**无需账号**的 OpenCodeZen 匿名免费通道，双击启动，浏览器管理。
 
-[![GitHub](https://img.shields.io/badge/GitHub-rockswang%2Fworkbuddy--wild-blue)](https://github.com/rockswang/workbuddy-wild)
+[![GitHub](https://img.shields.io/badge/GitHub-zrtzrt%2Fwild--work-blue)](https://github.com/zrtzrt/wild-work)
+
+> **上游已归档**：原仓库 [rockswang/wild-work](https://github.com/rockswang/wild-work) 于 2026-10-22
+> 归档（`archived`），停止更新。本仓 [zrtzrt/wild-work](https://github.com/zrtzrt/wild-work)
+> 接手后续维护与发版，**自动更新的默认源也已切到本仓**（R127）。
 
 ## 功能
 
@@ -98,7 +102,7 @@
 
 ### Windows
 
-1. 从 [Releases](https://github.com/rockswang/workbuddy-wild/releases) 下载 `wild-work.exe`
+1. 从 [Releases](https://github.com/zrtzrt/wild-work/releases) 下载 `wild-work.exe`
 2. 放到任意目录，双击启动
 3. 右下角出现 W 图标，**双击托盘图标** → 浏览器打开 Web 管理面板
 4. 在面板中点击「+ WorkBuddyCN」/「+ WorkBuddyAI」/「+ TraeWork」/「+ QoderCN」/「+ QoderCOM」/「+ 千问办公」/「+ 智谱清言」/「+ OfficeAce」添加账号
@@ -602,7 +606,7 @@ curl -X POST "http://127.0.0.1:7863/v1/systemone" \
 
 ## License
 
-[MIT](LICENSE) © rockswang。
+[MIT](LICENSE) © rockswang；本仓（[zrtzrt/wild-work](https://github.com/zrtzrt/wild-work)）在原 MIT 条款下继续维护与分发。
 
 欢迎 fork、修改与二次分发（含以独立仓库形式发布的衍生作品），只需按 MIT 条款保留版权声明与许可声明。
 仅供个人学习研究使用，请遵守各上游平台服务条款。

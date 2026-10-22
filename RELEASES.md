@@ -3718,3 +3718,61 @@ DeepSeek Harness 的 system prompt 正是以这句开头，于是经本代理转
 | [@xxhhlk](https://github.com/xxhhlk) | PR #187：签到时间改就地时间选择器 |
 | [@zrtzrt](https://github.com/zrtzrt)（代码作者 reno） | PR #189：`/v1/models` 输出 `supported_parameters` 与 `reasoning.mandatory`（R124） |
 
+
+
+---
+
+# wild-work v2.9.7
+
+本版是**上游归档后的第一个自建发版**：源仓库 `rockswang/wild-work` 已 archived（最后发布
+v2.9.6），本仓 `zrtzrt/wild-work` 接手发版与自动更新。对应决议 **R127**。
+
+> 版本号从 2.9.6 直接跳到 2.9.7，**没有功能回退**：v2.9.6 的全部内容（自定义渠道八项改进 R122、
+`/v1/models` 的 OpenRouter 规范字段 R124、Gemini Antigravity OAuth R125、Embeddings/Imagen R126）
+都在本版里，并新增下述四条工程能力。
+
+## 🔁 自动更新源切到本仓（R127）
+
+自动更新的默认仓库从已归档的 `rockswang/wild-work` 改为 `zrtzrt/wild-work`：
+
+- `internal/updater.DefaultRepo` 成为**单一来源**，`config.Default()` / `config.Validate()` 兜底 /
+  `NewService` 兜底 / `CheckSources` 兜底 / `config.example.json` / 面板「打开发布页」的兜底链接
+  全部引用它，避免六处各写一份后漂移。
+- **不改写你已有的 config.json**：只有 `updater.repo` 为空时才落默认值。已经从旧版升级、且
+  配置里写死了 `rockswang/wild-work` 的用户，请在面板「设置 → 更新仓库」改成 `zrtzrt/wild-work`
+  （或直接删掉 `updater.repo` 字段让它走默认），否则永远检测不到新版本。
+- 更新下载仍强制校验 SHA256（无 digest 的资产直接拒收），与 GitHub Release 自带的 digest 同源。
+
+## ✅ CI 加测试闸门：每次 push / PR 都跑（R127）
+
+新增 `.github/workflows/test.yml`：
+
+- `go build ./...` → `go vet ./...` → `go test -count=1 ./...` → `node scripts/ui-static-check.mjs`
+- `-count=1` 关缓存（CI 上的「缓存绿」会掩盖新代码的失败）
+- Go 版本走 `go-version-file: go.mod`，不在工作流里另写一份版本号
+- `CGO_ENABLED=0`，与 Windows/Linux 产物一致；macOS 的 cgo 编译由发版矩阵承担
+- `gofmt` 检查保持 advisory（仓库存量有 49 个未格式化文件，全量阻断会把新提交全打挂）
+
+## 🚦 发版前置校验 + SHA256 产物（R127）
+
+- `scripts/check-release.sh`：tag 触发的构建**之前**断言「版本常量 = tag」「RELEASES.md 已含该版本
+  段落」「决议项范围标记三处一致」，任一不满足即停，避免手滑 tag 产出版本号对不上/说明空白的
+  正式 release。本地也能跑：`TAG=v2.9.7 bash scripts/check-release.sh`
+- 每个产物额外生成并上传 `.sha256`，用户不必依赖 GitHub API 就能核对下载
+- `build.yml` 顶层 `permissions: contents: read`（只有 release job 提权 write）、`concurrency`
+  保证同一 tag 不并发跑两份构建、`gh release create` 前**幂等删除同名 release**（重推 tag 不再
+  因「tag already exists」失败）
+
+## 🧹 仓库清理
+
+- 仓库根目录历史上误提交过一份 18 MB 的 Mach-O 二进制 `wild-work`（与构建产物同名），
+  本次 `git rm --cached` 并从跟踪中移除，加 `.gitignore` 条目 `/wild-work`；
+  文件本身移到 `dist/wild-work-macos-arm64` 保留。
+- 合并上游 v2.9.6 时按 R123 处理文档号冲突：上游新增 R123（合 PR 改号纪律）与 R124
+  （`/v1/models` 补 `supported_parameters`），本地原 Gemini/Embeddings 两条顺延为 **R125 / R126**。
+
+## ✅ 验证
+
+`go build ./... && go vet ./... && go test ./...` 全绿（47 包）；`node scripts/ui-static-check.mjs`
+全部通过；`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./...` 通过（与 CI 判据一致）；
+`TAG=v2.9.6 bash scripts/check-release.sh` 通过（当前版本号仍是 2.9.6，发版提交再 bump）。

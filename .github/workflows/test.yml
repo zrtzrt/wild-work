@@ -1,0 +1,70 @@
+name: Test
+
+# 每次 push 到 master / 任何 PR 都跑一遍完整 Go 测试与前端静态检查。
+# 为什么单独成一个工作流：
+#   - Build Release 只在 tag 与手动触发时跑，日常提交没有任何测试闸门；
+#   - 本仓纪律要求「go build ./... && go vet ./... && go test ./... 全绿」才允许提交代码，
+#     这条纪律不能只靠人记得，得在服务端有一盏真的会亮的灯。
+#
+# 判据环境与发布产物一致：Linux + CGO_ENABLED=0（Windows/Linux 产物就是这么构建的）。
+# macOS 产物是 cgo 构建，本工作流不覆盖那一路；macOS 的编译验证由 Build Release 的
+# macos-* 矩阵项承担。
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      # go-version-file：版本唯一来源是 go.mod，避免 workflow 里再写一份版本号后两边漂移。
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      # -count=1 关掉测试结果缓存：CI 上必须真的重跑，否则「缓存绿」会掩盖新代码的失败。
+      - name: go test
+        run: go test -count=1 ./...
+
+      # 前端静态检查（scripts/ui-static-check.mjs）：断言 app.js 渲染函数、顶层符号不重复定义、
+      # 配色文档与 :root 一致等。node 在 ubuntu runner 上自带，无需额外安装。
+      - name: Frontend static check
+        run: node scripts/ui-static-check.mjs
+
+      # 格式检查为 advisory：仓库存量有若干未 gofmt 的文件（历史遗留），
+      # 直接阻断会把新提交全打挂；这里只提示本次改动涉及的文件。
+      - name: gofmt (advisory, changed files only)
+        continue-on-error: true
+        run: |
+          CHANGED=$(git diff --name-only --diff-filter=ACM "${{ github.event.pull_request.base.sha || 'HEAD~1' }}" HEAD 2>/dev/null | grep '\.go$' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "本次改动无 .go 文件"
+            exit 0
+          fi
+          BAD=$(gofmt -l $CHANGED || true)
+          if [ -n "$BAD" ]; then
+            echo "::warning::以下改动文件未 gofmt：$BAD"
+          else
+            echo "改动的 .go 文件均已 gofmt"
+          fi

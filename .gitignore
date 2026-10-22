@@ -40,3 +40,6 @@ Thumbs.db
 github_token.txt
 HANDOFF.md
 GO多平台发布备忘.md
+
+# 仓库根目录误编译产物（历史遗留，构建产物统一放 dist/）
+/wild-work

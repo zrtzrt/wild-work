@@ -3490,7 +3490,7 @@ function renderUpdateModalContent(st) {
   const readyNotice = $("updateReadyNotice");
   const errBox = $("updateErrorBox");
 
-  const releaseURL = (st.release && st.release.html_url) || "https://github.com/rockswang/wild-work/releases/latest";
+  const releaseURL = (st.release && st.release.html_url) || "https://github.com/zrtzrt/wild-work/releases/latest";
   btnBrowser.onclick = () => window.open(releaseURL, "_blank");
 
   if (st.status === "ready" || st.ready_to_restart) {

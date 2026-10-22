@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+// DefaultRepo 自动更新的默认 GitHub 仓库。
+//
+// 上游 rockswang/wild-work 已于 2026-10-22 归档（archived），不再发新版；
+// 本仓 master 现由 zrtzrt/wild-work 发布，故更新源整体切到这里（R127）。
+// 保留为单一来源：checker / service / config 的兜底值都引用它，避免三处各写一份后漂移。
+const DefaultRepo = "zrtzrt/wild-work"
+
 // Config 自动更新器配置。
 type Config struct {
 	CurrentVersion string
@@ -47,7 +54,7 @@ func NewService(cfg Config, metaClient, streamClient *http.Client) *Service {
 		cfg.CheckInterval = 6 * time.Hour
 	}
 	if cfg.Repo == "" {
-		cfg.Repo = "rockswang/wild-work"
+		cfg.Repo = DefaultRepo
 	}
 
 	return &Service{

@@ -36,7 +36,7 @@ func CheckSources(ctx context.Context, client *http.Client, repo, currentVer str
 	}
 	repo = strings.TrimSpace(repo)
 	if repo == "" {
-		repo = "rockswang/wild-work"
+		repo = DefaultRepo
 	}
 
 	type queryTarget struct {
