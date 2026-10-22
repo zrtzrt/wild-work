@@ -1997,10 +1997,15 @@ async function startLogin(channel, accountLabel) {
     // 想全自动：把该端口固定（config.login.lobsterai_callback_port）并在浏览器所在机器上
     // 建一条 `ssh -L 127.0.0.1:<port>:127.0.0.1:<port> <网关>` 转发，之后无需粘贴。
     if (r.manual_callback) {
-      $("lcCallbackHint").textContent =
-        "登录完成后若浏览器停在一条打不开的 127.0.0.1 地址上（上游只允许回调到 127.0.0.1，"
-        + "从别的机器打开面板时必然如此）：把那条完整 URL（含 ? 之后的全部参数）复制到下面提交，网关会立刻换取凭据。"
-        + "浏览器与网关同一台机器时无需理会此项；若已在浏览器所在机器建好端口转发，也会自动完成。";
+      if (channel === "gemini") {
+        $("lcCallbackHint").textContent =
+          "Google 授权完成后，复制页面上显示的授权码或地址栏完整 URL 粘贴到下方，点击「提交回调」即可完成登录。";
+      } else {
+        $("lcCallbackHint").textContent =
+          "登录完成后若浏览器停在一条打不开的 127.0.0.1 地址上（上游只允许回调到 127.0.0.1，"
+          + "从别的机器打开面板时必然如此）：把那条完整 URL（含 ? 之后的全部参数）复制到下面提交，网关会立刻换取凭据。"
+          + "浏览器与网关同一台机器时无需理会此项；若已在浏览器所在机器建好端口转发，也会自动完成。";
+      }
       $("lcCallbackRow").classList.remove("hidden");
     } else {
       $("lcCallbackRow").classList.add("hidden");
