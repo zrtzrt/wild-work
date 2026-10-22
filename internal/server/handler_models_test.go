@@ -180,9 +180,9 @@ func TestModelEntryOpenRouterParameters(t *testing.T) {
 	t.Run("tools_and_reasoning", func(t *testing.T) {
 		cd := true
 		mi := provider.ModelInfo{
-			ID:               "deepseek-r1",
-			SupportsTools:    true,
-			ReasoningEfforts: []string{"low", "medium", "high"},
+			ID:                 "deepseek-r1",
+			SupportsTools:      true,
+			ReasoningEfforts:   []string{"low", "medium", "high"},
 			CanDisableThinking: &cd,
 		}
 		entry := buildModelEntry(provider.WorkBuddy, mi)
@@ -191,13 +191,19 @@ func TestModelEntryOpenRouterParameters(t *testing.T) {
 		if !ok {
 			t.Fatalf("缺少 supported_parameters，得到 %T", entry["supported_parameters"])
 		}
-		expected := []string{"tools", "tool_choice", "reasoning", "include_reasoning", "reasoning_effort"}
+		// 合入 PR #189 时剔掉 include_reasoning（本仓零处理点），期望值同步；顺序不靠注定死
+		expected := []string{"tools", "tool_choice", "reasoning", "reasoning_effort"}
 		if len(params) != len(expected) {
 			t.Fatalf("supported_parameters 长度期望 %d，实际 %d (%v)", len(expected), len(params), params)
 		}
 		for i, v := range expected {
 			if params[i] != v {
 				t.Errorf("supported_parameters[%d] 期望 %q，实际 %q", i, v, params[i])
+			}
+		}
+		for _, p := range params { // R49 护栏：不得宣告本仓未实现的参数
+			if p == "include_reasoning" || p == "temperature" || p == "top_p" {
+				t.Errorf("supported_parameters 不得包含未实现/未声明的参数 %q", p)
 			}
 		}
 
