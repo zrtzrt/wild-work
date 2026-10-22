@@ -36,14 +36,12 @@ jobs:
             goarch: arm64
             cgo: "1"
             suffix: ""
-            pack_app: true
           - name: macos-amd64
             os: macos-latest
             goos: darwin
             goarch: amd64
             cgo: "1"
             suffix: ""
-            pack_app: true
           - name: linux-amd64
             os: ubuntu-latest
             goos: linux
@@ -150,48 +148,16 @@ jobs:
             fi
           done
 
-      # macOS：把二进制打成可双击的 .app 并生成 .dmg（脚本见 build/macos/build-app.sh）。
-      # ARCH 必须显式传：runner 架构（arm64）与目标架构（可能 amd64）未必一致。
-      # REQUIRE_DMG=1 → dmg 生成失败即让 job 失败，避免发出不含 dmg 的 release。
-      - name: Package macOS .app + .dmg
-        if: matrix.pack_app
-        env:
-          ARCH: ${{ matrix.goarch }}
-          REQUIRE_DMG: "1"
-        run: bash build/macos/build-app.sh
-
+      # **产物只保留可执行文件**（R129，用户决议）：
+      # - 不再打 .dmg：那一步要跑 build-app.sh（Info.plist / codesign / hdiutil），
+      #   是整条流水线最慢也最容易在 runner 上抖的一段，而它产出的仍是「包着同一个二进制」。
+      # - 不再单独上传 .sha256：GitHub Release 资产自带 digest（sha256），
+      #   自动更新器读的就是它；额外一份文件只是让 release 页更乱。
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: dist/wild-work-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
-
-      # 每个二进制同时产出 SHA256 校验文件（与 GitHub Release 资产自带的 digest 同算法）。
-      # 自动更新器只认真实 SHA256（internal/updater 拒收无 digest 的资产），
-      # 单独把校验和发出来也能让用户在不依赖 GitHub API 的情况下核对下载结果。
-      - name: Generate SHA256 checksum
-        run: |
-          OUT="dist/wild-work-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
-          ( cd dist && shasum -a 256 "$(basename "${OUT}")" > "$(basename "${OUT}").sha256" )
-          cat "dist/$(basename "${OUT}").sha256"
-
-      - name: Upload SHA256 checksum
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.name }}-sha256
-          path: dist/wild-work-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}.sha256
-
-      # dmg 单独作为 artifact 上传。release job 会 find 平铺 artifacts/ 下所有文件，
-      # 因此这里不需要改 release 逻辑，dmg 会自动进入 release 资产。
-      # 版本号来自 internal/app/app.go 的 Version 常量，workflow 里拿不到，故用通配符；
-      # 带 goarch 限定，确保只匹配本矩阵项自己那个架构的 dmg。
-      - name: Upload macOS .dmg
-        if: matrix.pack_app
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.name }}-dmg
-          path: dist/WildWork-*-${{ matrix.goarch }}.dmg
-          if-no-files-found: error
 
   release:
     needs: build

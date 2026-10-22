@@ -451,9 +451,10 @@ func buildModelEntry(k provider.Kind, mi provider.ModelInfo) map[string]any {
 		// 让客户端按它发而拿到静默忽略，正是 R49「绝不编造」要避免的情形，故剥掉。
 		params = append(params, "reasoning", "reasoning_effort")
 		reasoning := map[string]any{}
-		if len(mi.ReasoningEfforts) > 0 {
-			reasoning["supported_efforts"] = mi.ReasoningEfforts
-		}
+		// **不下发 supported_efforts**（R128，用户决议）：获取模型时那一长串思考强度档位
+		// 对客户端没有实际用途（真正生效的是入站 reasoning_effort），却把每个模型条目撑大
+		// 数倍。档位仍可查（/api/fees 与面板走另一条路径，不受影响）；R49「只透传声明」
+		// 依然成立——这里是**不下发**，不是编造新字段。
 		if mi.DefaultReasoningEffort != "" {
 			reasoning["default_effort"] = mi.DefaultReasoningEffort
 		}

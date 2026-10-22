@@ -107,9 +107,10 @@ func TestModelEntryReasoning(t *testing.T) {
 	if !ok {
 		t.Fatalf("缺少 reasoning 对象: %s", raw)
 	}
-	efforts, ok := r["supported_efforts"].([]any)
-	if !ok || len(efforts) != 3 || efforts[0] != "low" || efforts[2] != "max" {
-		t.Errorf("supported_efforts 应为 [low high max]，得到 %v", r["supported_efforts"])
+	// R128：supported_efforts（一长串思考强度档位）不再下发；
+	// 档位仍可从 /api/fees 与面板查，/v1/models 保持轻量。
+	if _, has := r["supported_efforts"]; has {
+		t.Errorf("R128：不应再下发 supported_efforts，实际 %v", r["supported_efforts"])
 	}
 	if r["default_effort"] != "high" {
 		t.Errorf("default_effort 应为 high，得到 %v", r["default_effort"])
@@ -175,7 +176,7 @@ func TestModelEntryReasoningMinimal(t *testing.T) {
 // TestModelEntryOpenRouterParameters 校验 OpenRouter 规范与 R49 护栏：
 // 1. supported_parameters 严格由声明能力动态导出，绝不编造未确认的采样参数 (temperature, top_p, max_tokens 等)；
 // 2. CanDisableThinking 为 nil 时，mandatory 与 can_disable_thinking 必须缺席 (严禁编造 mandatory: true)；
-// 3. 既有 issue #96 字段 (supported_efforts, default_effort, can_disable_thinking) 完整保留共存。
+// 3. issue #96 的 default_effort / can_disable_thinking 保留；supported_efforts 按 R128 不再下发。
 func TestModelEntryOpenRouterParameters(t *testing.T) {
 	t.Run("tools_and_reasoning", func(t *testing.T) {
 		cd := true
@@ -211,9 +212,10 @@ func TestModelEntryOpenRouterParameters(t *testing.T) {
 		if !ok {
 			t.Fatalf("缺少 reasoning 对象")
 		}
-		// issue #96 字段保持
-		if efforts, ok := r["supported_efforts"].([]string); !ok || len(efforts) != 3 {
-			t.Errorf("supported_efforts 未保留: %v", r["supported_efforts"])
+		// issue #96 的 default_effort / can_disable_thinking 保持；
+		// supported_efforts 按 R128 不再下发（档位改由 /api/fees 与面板承载）。
+		if _, has := r["supported_efforts"]; has {
+			t.Errorf("R128：不应再下发 supported_efforts，实际 %v", r["supported_efforts"])
 		}
 		if r["can_disable_thinking"] != true {
 			t.Errorf("can_disable_thinking 期望 true，实际 %v", r["can_disable_thinking"])
@@ -262,8 +264,9 @@ func TestModelEntryOpenRouterParameters(t *testing.T) {
 		if _, has := r["can_disable_thinking"]; has {
 			t.Errorf("CanDisableThinking 为 nil 时严禁输出 can_disable_thinking")
 		}
-		if efforts, ok := r["supported_efforts"].([]string); !ok || len(efforts) != 1 || efforts[0] != "medium" {
-			t.Errorf("supported_efforts 异常: %v", r["supported_efforts"])
+		// R128：档位列表不再下发，即使上游声明了 single 档位。
+		if _, has := r["supported_efforts"]; has {
+			t.Errorf("R128：不应再下发 supported_efforts，实际 %v", r["supported_efforts"])
 		}
 
 		// 检查 supported_parameters 绝不包含未确认的采样参数

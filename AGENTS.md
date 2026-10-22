@@ -45,7 +45,7 @@
 
 ---
 
-## 1. 决议项索引（R1–R127）
+## 1. 决议项索引（R1–R129）
 
 **全文（含证据链、反例、已知限制）见 [`docs/决议项.md`](docs/决议项.md)** —— 改动相关代码前必读对应条目。
 
@@ -159,6 +159,8 @@
 | R125 | **Gemini 渠道全面升级为 Antigravity OAuth 标准并支持模型动态拉取与多窗口配额**（2026-10-22，issue #167、PR #182、PR #190）：转向公开客户端 PKCE 授权码流程（Antigravity 官方白名单回调 `https://antigravity.google/oauth-callback`）；移除未登记 scope 防 403；支持完整回调 URL 与官方直接显示的授权码（`4/0AX...`）；动态拉取严格恪守 R49/R119，不猜测未声明能力；隔离 5h 与周配额窗口。详见 [`docs/决议项.md`](docs/决议项.md) R125 |
 | R126 | **扩展标准端点支持 Embeddings 向量化与 Imagen 生图**（2026-10-22，PR #190 续）：新增标准端点 `POST /v1/embeddings`（定义 `EmbeddingsProvider` 扩展接口）；扩展 `POST /v1/images/generations` 支持 Gemini/Imagen 生图分流至上游 `/v1internal:predict`；接入 `/v1internal:embedContent` 提供开箱即用向量化能力。详见 [`docs/决议项.md`](docs/决议项.md) R126 |
 | R127 | **上游归档后自建发版链路：更新源切到 zrtzrt/wild-work、CI 补测试闸门、发版前置校验与 SHA256 校验和、Actions 幂等发版**（2026-10-22，用户定「上游不更新了，把 action 等加上，我自己发布新版」）：① `internal/updater.DefaultRepo` 成为更新源单一来源，config 默认/兜底、`config.example.json`、`app.js` 发布页兜底链接全部改指 fork；② 新增 `.github/workflows/test.yml`（push master / PR 跑 `go build ./... && go vet ./... && go test -count=1 ./...` + `ui-static-check`）；③ 新增 `scripts/check-release.sh` 发版前置校验（版本常量=tag、RELEASES.md 含该段落、决议项范围标记三处一致）；④ `build.yml` 最小权限 + 并发组 + 产物 `.sha256` + `gh release` 幂等删除。详见 [`docs/决议项.md`](docs/决议项.md) R127 |
+| R128 | **`/v1/models` 不再下发 `supported_efforts` 档位列表**（2026-10-22，用户「精简产物」）：只删这一个字段，`default_effort`/`can_disable_thinking`/`mandatory`/`supported_parameters` 全保持；与 R124/R49 不冲突（不下发 ≠ 编造）。未直接并入分支提交 90386b2，因其另带「nil 时伪造 `mandatory:true`」「声明 `max_tokens`/`temperature`/`top_p`」两处违反 R49 的改动。测试断言反转为「不得出现」。详见 [`docs/决议项.md`](docs/决议项.md) R128 |
+| R129 | **release 产物只保留可执行文件：删 `.dmg`、删独立 `.sha256`**（2026-10-22，用户「精简产物，只保留可执行」）：dmg 打包是流水线最慢最易抖的一段且自动更新器从不消费它；校验和用 Release 资产自带的 `digest`。`MatchAsset` 的排除护栏保留。详见 [`docs/决议项.md`](docs/决议项.md) R129 |
 
 > ⚠️ **R71 附带的实测纪律**（也是 §0.1 的来源）：上游校验的是**头族齐全**而非单点
 > （只补 `X-Conversation-ID` 仍被拒）；且 `X-Conversation-ID` 的**取值形态不被校验**
@@ -464,7 +466,7 @@ bash scripts/probe-dump.sh summarize                # 汇总各渠道 usage 字�
 | [README.md](README.md) | 用户文档 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 开发者文档（面向 AI Agent） |
 | [AGENTS.md](AGENTS.md) | **本文件**：纪律 + 决议索引 + 关键不变量 + 构建发版 |
-| [docs/决议项.md](docs/决议项.md) | **R1–R127 决议全文**（证据链、反例、已知限制） |
+| [docs/决议项.md](docs/决议项.md) | **R1–R129 决议全文**（证据链、反例、已知限制） |
 | [docs/渠道接入备忘.md](docs/渠道接入备忘.md) | 各渠道协议要点、凭据模型、已知限制与踩坑 |
 | [docs/接口参考.md](docs/接口参考.md) | 面板区块规划 + 管理 API 全量清单 |
 | [docs/模型降级链定义.md](docs/模型降级链定义.md) | **模型降级链的唯一权威定义**：三维归因、错误类型全量归属、两条触发路径、三条硬规则、已知限制（R94） |
