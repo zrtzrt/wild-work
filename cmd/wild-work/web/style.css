@@ -519,6 +519,84 @@ select.input::-ms-expand, .select::-ms-expand { display: none; }
   border: 1px dashed var(--border); cursor: help;
 }
 .fees .rate-note { color: #d97706; font-size: 11px; }
+
+/* 倍率与单模型测试按钮包裹器 */
+.fees .rate-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fees .fee-test-slot {
+  display: inline-flex;
+  align-items: center;
+}
+.btn-model-test {
+  flex: none;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.btn-model-test:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #eff6ff;
+}
+.model-test-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+}
+.model-test-badge.pass {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+.model-test-badge.pass:hover {
+  background: #bbf7d0;
+}
+.model-test-badge.fail {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+.model-test-badge.fail:hover {
+  background: #fecaca;
+}
+.model-test-badge.testing {
+  background: #eff6ff;
+  color: var(--primary);
+  border: 1px solid #bfdbfe;
+  cursor: default;
+}
+.test-spinner {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  animation: testSpin .8s linear infinite;
+}
+@keyframes testSpin {
+  to { transform: rotate(360deg); }
+}
+
 /* 能力图标：模型 ID 后的小标记，hover 显示文字说明（title） */
 .fees .cap-icons { display: inline-flex; gap: 2px; margin-left: 2px; vertical-align: middle; }
 .fees .cap-icon {

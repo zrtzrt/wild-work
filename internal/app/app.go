@@ -4068,7 +4068,7 @@ func (a *App) HandleAPI(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, a.FeesInfo())
 		go a.safeGo(func() { a.RefreshPricing() })
 	})
-	mux.HandleFunc("POST /api/models/test", func(w http.ResponseWriter, r *http.Request) {
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Model  string   `json:"model"`
 			Models []string `json:"models"`
@@ -4098,7 +4098,9 @@ func (a *App) HandleAPI(mux *http.ServeMux) {
 			"ok":      true,
 			"results": results,
 		})
-	})
+	}
+	mux.HandleFunc("POST /api/models/test", testHandler)
+	mux.HandleFunc("POST /api/model/test", testHandler)
 	mux.HandleFunc("GET /api/usage", func(w http.ResponseWriter, r *http.Request) {
 		if a.ledger == nil {
 			writeJSON(w, http.StatusOK, map[string]any{"disabled": true})
@@ -4480,10 +4482,11 @@ type ModelTestResult struct {
 // TestModel 测试单个模型的可用性与连通性。
 func (a *App) TestModel(ctx context.Context, model string) ModelTestResult {
 	res := ModelTestResult{Model: model}
+	// serveHandler 已内含「httpRoot 优先 → handler 兜底 → 两者皆无返回 nil」。
+	// **不要**在这里再写 `h = a.handler` 兜底：把 (*server.Handler)(nil) 赋给
+	// http.Handler 会得到非 nil 的 typed-nil 接口，下面这层 nil 判断失效，
+	// 最终在 Handler.ServeHTTP 里空指针 panic（面板「测试」按钮变成 500 而不是「服务未就绪」）。
 	h := a.serveHandler()
-	if h == nil {
-		h = a.handler
-	}
 	if h == nil {
 		res.Error = "服务未就绪"
 		return res

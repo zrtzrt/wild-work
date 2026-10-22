@@ -178,6 +178,151 @@ function openModelSearch() {
 }
 function closeModelSearch() { $("modelSearchOverlay").classList.add("hidden"); }
 
+// ---------- 模型连通性测试（单模型与全量/本渠道批量测试） ----------
+const modelTestResults = {}; // mid -> { testing: bool, ok: bool, status: number, latency_ms: number, reply: string, error: string }
+let isTestingBatch = false;
+let testAbortRequested = false;
+
+function modelTestBadgeHtml(mid) {
+  const st = modelTestResults[mid];
+  if (!st) {
+    return `<button class="btn-model-test" data-testmid="${esc(mid)}" title="测试 ${esc(mid)} 可用性与延迟">测试</button>`;
+  }
+  if (st.testing) {
+    return `<span class="model-test-badge testing"><span class="test-spinner"></span> 测试中</span>`;
+  }
+  if (st.ok) {
+    const tip = `测试通过（HTTP ${st.status || 200}） · 耗时 ${st.latency_ms}ms\n回复：${st.reply || ""}\n点击重新测试`;
+    return `<span class="model-test-badge pass" data-testmid="${esc(mid)}" title="${esc(tip)}">✓ ${st.latency_ms}ms</span>`;
+  }
+  const tip = `测试失败（HTTP ${st.status || "异常"}） · 耗时 ${st.latency_ms || 0}ms\n错误：${st.error || ""}\n点击重新测试`;
+  return `<span class="model-test-badge fail" data-testmid="${esc(mid)}" title="${esc(tip)}">✗ ${st.status || "失败"}</span>`;
+}
+
+function updateModelTestSlot(mid) {
+  const slots = document.querySelectorAll(`[data-testslot="${CSS.escape ? CSS.escape(mid) : mid}"]`);
+  slots.forEach((s) => {
+    s.innerHTML = modelTestBadgeHtml(mid);
+  });
+}
+
+async function testSingleModel(mid, showToast = true) {
+  if (!mid) return;
+  modelTestResults[mid] = { testing: true };
+  updateModelTestSlot(mid);
+  try {
+    const res = await api("/api/models/test", { model: mid });
+    modelTestResults[mid] = {
+      testing: false,
+      ok: !!res.ok,
+      status: res.status,
+      latency_ms: res.latency_ms || 0,
+      reply: res.reply || "",
+      error: res.error || "",
+    };
+    updateModelTestSlot(mid);
+    if (showToast) {
+      if (res.ok) {
+        toast(`✓ [${mid}] 测试通过（${res.latency_ms}ms）`);
+      } else {
+        toast(`✗ [${mid}] 测试失败（HTTP ${res.status || "异常"}）：${res.error || "连接异常"}`);
+      }
+    }
+    return res;
+  } catch (e) {
+    modelTestResults[mid] = {
+      testing: false,
+      ok: false,
+      status: 0,
+      latency_ms: 0,
+      error: e.message,
+    };
+    updateModelTestSlot(mid);
+    if (showToast) {
+      toast(`✗ [${mid}] 测试异常：${e.message}`);
+    }
+    return { ok: false, error: e.message };
+  }
+}
+
+async function testModelsBatch(models, triggerBtn) {
+  if (isTestingBatch) {
+    testAbortRequested = true;
+    if (triggerBtn) triggerBtn.textContent = "正在停止…";
+    return;
+  }
+  if (!models || models.length === 0) {
+    toast("暂无可用模型可测试");
+    return;
+  }
+  isTestingBatch = true;
+  testAbortRequested = false;
+
+  const origText = triggerBtn ? triggerBtn.textContent : "测试";
+  if (triggerBtn) {
+    triggerBtn.classList.add("danger");
+    triggerBtn.textContent = `停止 (0/${models.length})`;
+  }
+
+  let passed = 0;
+  let failed = 0;
+  const total = models.length;
+
+  try {
+    for (let i = 0; i < total; i++) {
+      if (testAbortRequested) break;
+      const item = models[i];
+      const mid = typeof item === "string" ? item : (item.full || item.id || item.model);
+      if (triggerBtn) triggerBtn.textContent = `停止 (${i + 1}/${total})`;
+      const res = await testSingleModel(mid, false);
+      if (res && res.ok) passed++;
+      else failed++;
+    }
+    if (testAbortRequested) {
+      toast(`测试已中止：已测 ${passed + failed}/${total} 个（成功 ${passed}，失败 ${failed}）`);
+    } else {
+      toast(`批量测试完成：共 ${total} 个模型（成功 ${passed}，失败 ${failed}）`);
+    }
+  } finally {
+    isTestingBatch = false;
+    testAbortRequested = false;
+    if (triggerBtn) {
+      triggerBtn.classList.remove("danger");
+      triggerBtn.textContent = origText;
+    }
+  }
+}
+
+function testCurrentChannelModels() {
+  const fees = renderFees.last;
+  if (!fees || !fees.channels || !fees.channels.length) {
+    toast("费率数据尚未加载，请稍候或点「刷新」");
+    return;
+  }
+  const curCh = renderFees.lastCh || fees.channels[0].channel;
+  const ch = fees.channels.find((c) => c.channel === curCh);
+  if (!ch || !ch.models || !ch.models.length) {
+    toast(`渠道 ${chLabel(curCh)} 下暂无模型`);
+    return;
+  }
+  const models = ch.models.map((m) => {
+    const raw = m.model;
+    const full = m.id || (ch.channel && !raw.startsWith(`${ch.channel}/`) ? `${ch.channel}/${raw}` : raw);
+    return full;
+  });
+  testModelsBatch(models, $("btnTestCurFees"));
+}
+
+function testAllChannelModels() {
+  const all = collectAllModels();
+  if (!all.length) {
+    toast("费率数据尚未加载，请稍候或点「刷新」");
+    return;
+  }
+  const models = all.map((x) => x.full);
+  testModelsBatch(models, $("btnTestAllFees"));
+}
+
 // renderModelSearch 按关键字过滤全渠道模型并渲染（对话框固定高度，结果在 .ms-list 内滚动）。
 // 关键字匹配完整 ID 或裸名（大小写不敏感）——两处都包含渠道名，故搜渠道亦可。
 function renderModelSearch(q) {
@@ -201,6 +346,7 @@ function renderModelSearch(q) {
         + `<span class="ms-name">${esc(short)}</span>`
         + `<span class="ms-tags">${ctx}${caps}${eff}</span>`
         + `<span class="ms-rate">${esc(rate)}</span>`
+        + `<span class="fee-test-slot" data-testslot="${esc(full)}">${modelTestBadgeHtml(full)}</span>`
         + `</div>`;
     }).join("");
   }
@@ -1500,15 +1646,19 @@ function renderFees(fees) {
   };
 
   // 单行倍率单元格
-  const rateCell = (m) => {
+  const rateCell = (m, chPrefix) => {
     if (!m) return "";
+    let rateBadge = "";
     if (!m.priced) {
-      return `<span class="rate-unknown" title="${esc(UNKNOWN_TIP)}">unknown</span>`;
+      rateBadge = `<span class="rate-unknown" title="${esc(UNKNOWN_TIP)}">unknown</span>`;
+    } else if (m.free) {
+      rateBadge = `<span class="rate-free" title="上游标注为免费（x0.00）">✦ Free</span>`;
+    } else {
+      rateBadge = `<span class="rate-paid">x${m.rate.toFixed(2)}</span>`;
     }
-    if (m.free) {
-      return `<span class="rate-free" title="上游标注为免费（x0.00）">✦ Free</span>`;
-    }
-    return `<span class="rate-paid">x${m.rate.toFixed(2)}</span>`;
+    const raw = m.model;
+    const full = m.id || (chPrefix && !raw.startsWith(`${chPrefix}/`) ? `${chPrefix}/${raw}` : raw);
+    return `<div class="rate-wrap">${rateBadge}<span class="fee-test-slot" data-testslot="${esc(full)}">${modelTestBadgeHtml(full)}</span></div>`;
   };
 
   // 促销标签：使用上游给的颜色（原本被拼在文案里没解析）
@@ -1574,7 +1724,7 @@ function renderFees(fees) {
       const m2 = models[i + 1];
       const id1 = modelCellHtml(m1, ch.channel);
       const id2 = modelCellHtml(m2, ch.channel);
-      html += `<tr><td>${id1}</td><td>${rateCell(m1)}</td><td>${id2}</td><td>${rateCell(m2)}</td></tr>`;
+      html += `<tr><td>${id1}</td><td>${rateCell(m1, ch.channel)}</td><td>${id2}</td><td>${rateCell(m2, ch.channel)}</td></tr>`;
     }
     html += `</tbody></table>`;
     // 「显示全部模型」开着就把拉取结果列在表格下面（R122）
@@ -1591,6 +1741,11 @@ function renderFees(fees) {
 function bindFeesTabs() {
   const box = $("feesBox");
   box.addEventListener("click", (e) => {
+    const testBtn = e.target.closest && e.target.closest("[data-testmid]");
+    if (testBtn) {
+      testSingleModel(testBtn.dataset.testmid);
+      return;
+    }
     // 模型名点击复制（官方 v2.6.1）：code.fee-model-copy 优先判定，
     // 与下方的 .full-id（二开完整 ID 行）互不冲突、语义一致。
     const code = e.target.closest("code.fee-model-copy");
@@ -3728,6 +3883,8 @@ function bind() {
   $("btnSubmitCallback").onclick = submitCallback;
   $("btnCancelLogin").onclick = cancelLogin;
   $("btnRefreshFees").onclick = refreshFees;
+  $("btnTestCurFees").onclick = testCurrentChannelModels;
+  $("btnTestAllFees").onclick = testAllChannelModels;
   // 模型查找面板（纯前端）：入口按钮 + 关闭 + 输入即过滤 + 结果点击复制完整 ID。
   $("btnModelSearch").onclick = openModelSearch;
   $("btnModelSearchClose").onclick = closeModelSearch;
@@ -3741,6 +3898,11 @@ function bind() {
   $("modelSearchInput").oninput = (e) => renderModelSearch(e.target.value);
   $("modelSearchInput").onkeydown = (e) => { if (e.key === "Escape") closeModelSearch(); };
   $("modelSearchList").onclick = (e) => {
+    const testBtn = e.target.closest && e.target.closest("[data-testmid]");
+    if (testBtn) {
+      testSingleModel(testBtn.dataset.testmid);
+      return;
+    }
     const row = e.target.closest(".ms-row");
     if (row) copyText(row.dataset.mid, "模型 ID");
   };
