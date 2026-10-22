@@ -3775,4 +3775,9 @@ v2.9.6），本仓 `zrtzrt/wild-work` 接手发版与自动更新。对应决议
 
 `go build ./... && go vet ./... && go test ./...` 全绿（47 包）；`node scripts/ui-static-check.mjs`
 全部通过；`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./...` 通过（与 CI 判据一致）；
-`TAG=v2.9.6 bash scripts/check-release.sh` 通过（当前版本号仍是 2.9.6，发版提交再 bump）。
+`TAG=v2.9.7 bash scripts/check-release.sh` 通过（版本常量已 bump 到 2.9.7、本段落已就位、决议项范围标记一致）。
+
+另外修掉一处 **在 CI 上必然失败** 的测试：`internal/stats` 的三个到期用例原先用 `time.Local` 做锚点，
+而到期值永远按 UTC+8 解释（`provider.ExpireInstant`），本地（UTC+8）恰好一致、GitHub Actions
+runner（UTC）上差 8 小时 ⇒ 「今晚 24:00 失效 = 剩 10h」跑成「剩 2h」。现已把测试锚点统一到
+`testLoc()`（UTC+8，与生产同源），判据未改，任何时区下结果一致。
